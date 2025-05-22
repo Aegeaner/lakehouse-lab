@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  dremio:
+    image: dremio/dremio-oss
+    container_name: dremio
+    networks:
+      - shared-network
+    ports:
+      - "9047:9047"   # UI
+      - "31010:31010" # JDBC
+      - "45678:45678" # Internal
+    volumes:
+      - dremio-data:/opt/dremio/data
+      - ./iceberg-warehouse:/opt/iceberg/warehouse  # Iceberg 仓库（本地挂载）
+    environment:
+      - JAVA_OPTS=-Diceberg.warehouse=/opt/iceberg/warehouse  # 重要：设置 Iceberg 仓库
+
+volumes:
+  dremio-data:

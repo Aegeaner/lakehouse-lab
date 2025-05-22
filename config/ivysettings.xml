@@ -1,0 +1,21 @@
+<ivysettings>
+  <settings defaultResolver="chain"/>
+  <credentials host="repo.maven.apache.org" realm="Sonatype Nexus Repository Manager" username="anonymous" password=""/>
+  <resolvers>
+    <chain name="chain">
+      <filesystem name="local">
+        <ivy pattern="${ivy.home}/local/[organisation]/[module]/(scala_[scalaVersion]/)(sbt_[sbtVersion]/)[revision]/[type]s/[artifact](-[classifier]).[ext]" />
+        <artifact pattern="${ivy.home}/local/[organisation]/[module]/(scala_[scalaVersion]/)(sbt_[sbtVersion]/)[revision]/[type]s/[artifact](-[classifier]).[ext]" />
+      </filesystem>
+      <ibiblio name="central" m2compatible="true" root="https://repo1.maven.org/maven2/" />
+      <ibiblio name="spark-packages" m2compatible="true" root="https://repos.spark-packages.org/" />
+      <ibiblio name="cloudera" m2compatible="true" root="https://repository.cloudera.com/artifactory/cloudera-repos/" />
+    </chain>
+  </resolvers>
+  <modules>
+    <module organisation="org.apache.spark" resolver="chain" />
+    <module organisation="org.apache.hadoop" resolver="chain" />
+    <module organisation="org.apache.hive" resolver="chain" />
+    <module organisation="org.apache.spark" name="spark-core_2.12" resolver="chain" />
+  </modules>
+</ivysettings>    

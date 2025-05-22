@@ -1,0 +1,25 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Docker
+*.log
+*.pid
+*.bak
+*.tmp
+.env
+.env.local
+drivers/
+iceberg-warehouse/
+
+# IntelliJ / VSCode
+.idea/
+.vscode/
+
+# OS generated
+.DS_Store
+Thumbs.db
+
+# Jupyter / Zeppelin
+.ipynb_checkpoints/

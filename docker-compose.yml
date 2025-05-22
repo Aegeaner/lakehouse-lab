@@ -1,0 +1,123 @@
+version: '3.8'
+
+networks:
+  shared-network:
+    driver: bridge
+services:
+  spark-master:
+    image: bitnami/spark:latest
+    container_name: spark-master
+    labels:
+      - "role=master"
+    user: root
+    ports:
+      - "8082:8080"
+      - "7077:7077"
+    environment:
+      - SPARK_MODE=master
+      - HADOOP_USER_NAME=root
+      - SPARK_USER=root
+    networks:
+      - shared-network
+    volumes:
+      - ./config/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf
+      - ./config/core-site.xml:/opt/bitnami/spark/conf/core-site.xml
+      - ./config/ivysettings.xml:/opt/bitnami/spark/conf/ivysettings.xml
+      - ./examples/spark-iceberg:/opt/bitnami/spark/jobs
+      - ./data:/opt/bitnami/spark/data
+      - ./drivers:/opt/bitnami/spark/external-jars
+      - ./iceberg-warehouse:/opt/iceberg/warehouse  # Iceberg 仓库
+
+  spark-worker:
+    image: bitnami/spark:latest
+    container_name: spark-worker
+    labels:
+      - "role=worker"
+    user: root
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - HADOOP_USER_NAME=root
+      - SPARK_USER=root
+    networks:
+      - shared-network
+    volumes:
+      - ./config/core-site.xml:/opt/bitnami/spark/conf/core-site.xml
+      - ./config/ivysettings.xml:/opt/bitnami/spark/conf/ivysettings.xml
+      - ./data:/opt/bitnami/spark/data
+    ports:
+      - "8083:8083"
+
+  kafka:
+    image: bitnami/kafka:latest
+    container_name: kafka-container
+    ports:
+      - "9092:9092"
+    environment:
+      # KRaft 模式配置
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+    networks:
+      - shared-network
+
+  jobmanager:
+    image: flink:latest
+    container_name: flink-jobmanager
+    networks:
+      - shared-network
+    ports:
+      - "8081:8081"
+    command: jobmanager
+    depends_on:
+      - kafka
+
+  taskmanager:
+    image: flink:latest
+    container_name: flink-taskmanager
+    networks:
+      - shared-network
+    depends_on:
+      - jobmanager
+    command: taskmanager
+
+  minio:
+    image: minio/minio
+    container_name: minio
+    networks:
+      - shared-network
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+    volumes:
+      - minio-data:/data
+
+  trino:
+    image: trinodb/trino:latest
+    container_name: trino
+    networks:
+      - shared-network
+    ports:
+      - "8080:8080"
+
+  nessie:
+    image: projectnessie/nessie
+    container_name: nessie
+    networks:
+      - shared-network
+    ports:
+      - "19120:19120"
+
+volumes:
+  minio-data:
