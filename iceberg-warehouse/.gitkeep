@@ -1,0 +1,2 @@
+# This file ensures the iceberg-warehouse/ directory is tracked by git
+# Iceberg table metadata and data files will be stored here

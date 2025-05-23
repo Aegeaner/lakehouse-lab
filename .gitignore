@@ -9,8 +9,12 @@ __pycache__/
 *.bak
 *.tmp
 .env.local
-drivers/
-iceberg-warehouse/
+
+# Track empty directories but ignore their contents
+drivers/*
+!drivers/.gitkeep
+iceberg-warehouse/*
+!iceberg-warehouse/.gitkeep
 
 # IntelliJ / VSCode
 .idea/
