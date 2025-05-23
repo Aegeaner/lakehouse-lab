@@ -11,9 +11,40 @@ services:
       - "45678:45678" # Internal
     volumes:
       - dremio-data:/opt/dremio/data
-      - ./iceberg-warehouse:/opt/iceberg/warehouse  # Iceberg 仓库（本地挂载）
+      - ./iceberg-warehouse:/opt/iceberg/warehouse:rw  # Iceberg warehouse (read-write)
+      - ./data:/opt/dremio/datasets:rw                 # Sample datasets
     environment:
-      - JAVA_OPTS=-Diceberg.warehouse=/opt/iceberg/warehouse  # 重要：设置 Iceberg 仓库
+      - DREMIO_JAVA_SERVER_EXTRA_OPTS=-Diceberg.warehouse=/opt/iceberg/warehouse -Xmx4g
+      - DREMIO_MAX_HEAP_MEMORY_SIZE_MB=4096
+      - DREMIO_MAX_DIRECT_MEMORY_SIZE_MB=2048
+    depends_on:
+      - minio
+      - nessie
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9047/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # PostgreSQL for Nessie metadata storage
+  postgres:
+    image: postgres:15
+    container_name: nessie-postgres
+    networks:
+      - shared-network
+    environment:
+      - POSTGRES_DB=nessie
+      - POSTGRES_USER=nessie
+      - POSTGRES_PASSWORD=nessie
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nessie"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   dremio-data:
+  postgres-data:
