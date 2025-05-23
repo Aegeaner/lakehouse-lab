@@ -18,12 +18,9 @@ fi
 # Start all services
 docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d --remove-orphans
 
-# Wait for Kafka to be ready
-echo "⏳ Waiting for Kafka to initialize..."
+# Wait for services to be ready
+echo "⏳ Waiting for services to initialize..."
 sleep 10
-
-# Initialize Kafka topic
-./scripts/init_kafka_topics.sh
 
 echo "✅ Environment started successfully!"
 echo ""

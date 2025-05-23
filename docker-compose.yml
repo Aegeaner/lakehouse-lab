@@ -71,22 +71,48 @@ services:
   jobmanager:
     image: flink:latest
     container_name: flink-jobmanager
+    hostname: jobmanager
     networks:
       - shared-network
     ports:
       - "8081:8081"
     command: jobmanager
+    environment:
+      - FLINK_PROPERTIES=${FLINK_PROPERTIES}
+    volumes:
+      - ./examples/flink-iceberg:/opt/flink/examples
+      - ./iceberg-warehouse:/opt/iceberg/warehouse
+      - flink-checkpoints:/opt/flink/checkpoints
+      - flink-savepoints:/opt/flink/savepoints
     depends_on:
       - kafka
+      - nessie
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 
   taskmanager:
     image: flink:latest
     container_name: flink-taskmanager
     networks:
       - shared-network
+    command: taskmanager
+    environment:
+      - FLINK_PROPERTIES=${FLINK_PROPERTIES}
+    volumes:
+      - ./iceberg-warehouse:/opt/iceberg/warehouse
+      - flink-checkpoints:/opt/flink/checkpoints
+      - flink-savepoints:/opt/flink/savepoints
     depends_on:
       - jobmanager
-    command: taskmanager
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep -v grep | grep taskmanager"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   minio:
     image: minio/minio
@@ -134,3 +160,5 @@ services:
 
 volumes:
   minio-data:
+  flink-checkpoints:
+  flink-savepoints:
