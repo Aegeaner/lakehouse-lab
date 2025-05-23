@@ -8,7 +8,6 @@ __pycache__/
 *.pid
 *.bak
 *.tmp
-.env
 .env.local
 drivers/
 iceberg-warehouse/
