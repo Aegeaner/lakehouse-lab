@@ -6,7 +6,9 @@ echo "✅ Starting lakehouse-lab environment..."
 # Load .env if present
 if [ -f .env ]; then
   echo "🔧 Loading environment variables from .env"
-  export $(cat .env | grep -v '#' | xargs)
+  set -a  # automatically export all variables
+  source .env
+  set +a  # disable automatic export
 fi
 
 # Check Docker is running
@@ -16,7 +18,7 @@ if ! docker info > /dev/null 2>&1; then
 fi
 
 # Start all services
-docker-compose -f docker-compose.yml -f docker-compose.override.yml up -d --remove-orphans
+docker-compose up -d --remove-orphans
 
 # Wait for services to be ready
 echo "⏳ Waiting for services to initialize..."
@@ -27,7 +29,7 @@ echo ""
 echo "🧭 Service Endpoints:"
 echo "MinIO Console:     http://localhost:9001  (Access Key: $MINIO_ACCESS_KEY)"
 echo "Nessie API:        http://localhost:19120"
-echo "Trino UI:          http://localhost:8080"
+echo "Trino UI:          http://localhost:8084"
 echo "Flink Dashboard:   http://localhost:8081"
 echo "Spark UI:          http://localhost:8082"
 echo "Dremio UI:         http://localhost:9047"

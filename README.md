@@ -7,7 +7,8 @@
 - **数据处理引擎**: Spark、Flink、Kafka、MinIO、Trino、Nessie、Dremio OSS
 - **Spark 示例**: Scala 操作 Iceberg 表，批处理分析
 - **Flink 示例**: 实时流处理，Kafka → Flink → Iceberg 管道
-- **多种用例**: 简单流处理、窗口聚合、CDC 处理
+- **Trino 示例**: 高性能 SQL 查询，时间旅行，模式演进
+- **多种用例**: 简单流处理、窗口聚合、CDC 处理、交互式分析
 - **自动化脚本**: 一键部署、数据生成、测试验证
 - **Apache 2.0 License**
 
@@ -18,6 +19,7 @@
 - **详细说明文档**: 
   - Spark 集成: `ICEBERG_INTEGRATION.md`
   - Flink 集成: `FLINK_ICEBERG_INTEGRATION.md`
+  - Trino 集成: `TRINO_INTEGRATION.md`
   - Dremio 限制: `DREMIO_OSS_LIMITATIONS.md`
 
 ## 🚀 快速启动
@@ -31,7 +33,7 @@ chmod +x start.sh reset.sh scripts/*.sh
 ### 2. Spark-Iceberg 批处理
 ```bash
 # 运行 Spark 示例
-./scripts/run_examples.sh simple
+./scripts/run_spark_examples.sh simple
 
 # 配置 Dremio (可选)
 ./scripts/setup_dremio.sh
@@ -40,20 +42,34 @@ chmod +x start.sh reset.sh scripts/*.sh
 ### 3. Flink-Iceberg 流处理
 ```bash
 # 设置 Flink 集成
-./scripts/setup_flink_iceberg.sh
+./scripts/setup_flink.sh
 
 # 生成测试数据
 python3 scripts/generate_sample_data.py --data-type all
 
 # 运行流处理示例
-./scripts/run_flink_example.sh simple
+./scripts/run_flink_examples.sh simple
 
 # 运行完整测试
-./scripts/test_flink_iceberg.sh
+./scripts/test_flink.sh
 ```
 
-### 4. 访问 UI
+### 4. Trino-Iceberg 查询引擎
+```bash
+# 设置 Trino 集成
+./scripts/setup_trino.sh
+
+# 测试 Trino 连接
+./scripts/test_trino.sh
+
+# 运行 Trino 示例
+./scripts/run_trino_examples.sh basic
+```
+
+### 5. 访问 UI
 - **Flink**: http://localhost:8081
 - **Spark**: http://localhost:8082  
+- **Trino**: http://localhost:8084
 - **Dremio**: http://localhost:9047
 - **MinIO**: http://localhost:9001
+- **Nessie**: http://localhost:19120
