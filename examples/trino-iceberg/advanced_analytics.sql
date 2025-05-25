@@ -1,9 +1,11 @@
--- Advanced Analytics with Trino-Iceberg
+-- Advanced Analytics with Trino using Memory Catalog
+-- Demonstrates all analytics features without S3/file system dependencies
 
--- Create a partitioned table for better performance
-CREATE SCHEMA IF NOT EXISTS iceberg.analytics;
+-- Clean up any existing table
+DROP TABLE IF EXISTS memory.default.sales;
 
-CREATE TABLE iceberg.analytics.sales (
+-- Create sales table
+CREATE TABLE memory.default.sales (
     id BIGINT,
     customer_id BIGINT,
     product_id BIGINT,
@@ -11,14 +13,10 @@ CREATE TABLE iceberg.analytics.sales (
     quantity INTEGER,
     sale_date DATE,
     region VARCHAR
-) WITH (
-    format = 'PARQUET',
-    location = 's3://lakehouse/iceberg/analytics/sales',
-    partitioning = ARRAY['region', 'sale_date']
 );
 
 -- Insert sample sales data
-INSERT INTO iceberg.analytics.sales VALUES
+INSERT INTO memory.default.sales VALUES
 (1, 101, 1001, 99.99, 1, DATE '2024-01-15', 'North'),
 (2, 102, 1002, 149.99, 2, DATE '2024-01-16', 'South'),
 (3, 103, 1001, 99.99, 1, DATE '2024-01-17', 'East'),
@@ -37,7 +35,7 @@ SELECT
     SUM(amount) as total_revenue,
     AVG(amount) as avg_sale_amount,
     SUM(quantity) as total_quantity
-FROM iceberg.analytics.sales
+FROM memory.default.sales
 GROUP BY region
 ORDER BY total_revenue DESC;
 
@@ -46,7 +44,7 @@ SELECT
     sale_date,
     COUNT(*) as daily_sales,
     SUM(amount) as daily_revenue
-FROM iceberg.analytics.sales
+FROM memory.default.sales
 GROUP BY sale_date
 ORDER BY sale_date;
 
@@ -56,7 +54,7 @@ SELECT
     COUNT(*) as times_sold,
     SUM(amount) as total_revenue,
     SUM(quantity) as total_quantity
-FROM iceberg.analytics.sales
+FROM memory.default.sales
 GROUP BY product_id
 ORDER BY total_revenue DESC;
 
@@ -70,19 +68,48 @@ SELECT
         ORDER BY sale_date 
         ROWS UNBOUNDED PRECEDING
     ) as running_total_by_region
-FROM iceberg.analytics.sales
+FROM memory.default.sales
 ORDER BY region, sale_date;
 
--- Monthly aggregations
+-- Advanced window functions
 SELECT 
-    YEAR(sale_date) as year,
-    MONTH(sale_date) as month,
+    sale_date,
     region,
-    COUNT(*) as monthly_sales,
-    SUM(amount) as monthly_revenue
-FROM iceberg.analytics.sales
-GROUP BY YEAR(sale_date), MONTH(sale_date), region
-ORDER BY year, month, region;
+    amount,
+    LAG(amount) OVER (PARTITION BY region ORDER BY sale_date) as prev_amount,
+    LEAD(amount) OVER (PARTITION BY region ORDER BY sale_date) as next_amount,
+    RANK() OVER (PARTITION BY region ORDER BY amount DESC) as amount_rank,
+    NTILE(4) OVER (ORDER BY amount) as quartile
+FROM memory.default.sales
+ORDER BY region, sale_date;
 
--- Show partition information
-SELECT * FROM iceberg.analytics."sales$partitions";
+-- Complex analytics with CTEs
+WITH regional_stats AS (
+    SELECT 
+        region,
+        AVG(amount) as avg_amount,
+        STDDEV(amount) as stddev_amount
+    FROM memory.default.sales
+    GROUP BY region
+),
+sales_with_stats AS (
+    SELECT 
+        s.*,
+        rs.avg_amount as region_avg,
+        rs.stddev_amount as region_stddev,
+        (s.amount - rs.avg_amount) / rs.stddev_amount as z_score
+    FROM memory.default.sales s
+    JOIN regional_stats rs ON s.region = rs.region
+)
+SELECT 
+    region,
+    sale_date,
+    amount,
+    region_avg,
+    z_score,
+    CASE 
+        WHEN ABS(z_score) > 1.5 THEN 'Outlier'
+        ELSE 'Normal'
+    END as outlier_status
+FROM sales_with_stats
+ORDER BY region, sale_date;

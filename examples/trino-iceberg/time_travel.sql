@@ -1,112 +1,155 @@
--- Time Travel Examples with Trino-Iceberg
+-- Time Travel Concepts with Trino using Memory Catalog
+-- Note: Memory catalog doesn't support Iceberg time travel features
+-- This demonstrates versioning patterns and temporal analysis techniques
 
--- Create a table for time travel demonstration
-CREATE SCHEMA IF NOT EXISTS iceberg.timetravel;
+-- Clean up any existing tables
+DROP TABLE IF EXISTS memory.default.inventory_v1;
+DROP TABLE IF EXISTS memory.default.inventory_v2;
+DROP TABLE IF EXISTS memory.default.inventory_v3;
+DROP TABLE IF EXISTS memory.default.inventory_history;
 
-CREATE TABLE iceberg.timetravel.inventory (
+-- Create initial inventory snapshot (Version 1)
+CREATE TABLE memory.default.inventory_v1 (
     id BIGINT,
     product_name VARCHAR,
     quantity INTEGER,
     price DECIMAL(10,2),
-    last_updated TIMESTAMP WITH TIME ZONE
-) WITH (
-    format = 'PARQUET',
-    location = 's3://lakehouse/iceberg/timetravel/inventory'
+    snapshot_time TIMESTAMP WITH TIME ZONE,
+    version_id INTEGER
 );
 
 -- Initial inventory data
-INSERT INTO iceberg.timetravel.inventory VALUES
-(1, 'Laptop', 50, 999.99, CURRENT_TIMESTAMP),
-(2, 'Mouse', 200, 29.99, CURRENT_TIMESTAMP),
-(3, 'Keyboard', 100, 79.99, CURRENT_TIMESTAMP);
+INSERT INTO memory.default.inventory_v1 VALUES
+(1, 'Laptop', 50, 999.99, CURRENT_TIMESTAMP, 1),
+(2, 'Mouse', 200, 29.99, CURRENT_TIMESTAMP, 1),
+(3, 'Keyboard', 100, 79.99, CURRENT_TIMESTAMP, 1);
 
--- Check initial state and get snapshot info
-SELECT * FROM iceberg.timetravel.inventory;
+-- Check initial state
+SELECT * FROM memory.default.inventory_v1;
 
--- Show snapshots (save the snapshot IDs for later use)
+-- Create second version after changes (Version 2)
+CREATE TABLE memory.default.inventory_v2 (
+    id BIGINT,
+    product_name VARCHAR,
+    quantity INTEGER,
+    price DECIMAL(10,2),
+    snapshot_time TIMESTAMP WITH TIME ZONE,
+    version_id INTEGER
+);
+
+-- Simulate changes: sell laptops, restock mice
+INSERT INTO memory.default.inventory_v2 VALUES
+(1, 'Laptop', 45, 999.99, CURRENT_TIMESTAMP, 2),  -- Sold 5 laptops
+(2, 'Mouse', 250, 29.99, CURRENT_TIMESTAMP, 2),   -- Restocked mice
+(3, 'Keyboard', 100, 79.99, CURRENT_TIMESTAMP, 2); -- No change
+
+-- Create third version with more changes (Version 3)
+CREATE TABLE memory.default.inventory_v3 (
+    id BIGINT,
+    product_name VARCHAR,
+    quantity INTEGER,
+    price DECIMAL(10,2),
+    snapshot_time TIMESTAMP WITH TIME ZONE,
+    version_id INTEGER
+);
+
+-- More changes: price adjustment, new product
+INSERT INTO memory.default.inventory_v3 VALUES
+(1, 'Laptop', 45, 999.99, CURRENT_TIMESTAMP, 3),
+(2, 'Mouse', 250, 29.99, CURRENT_TIMESTAMP, 3),
+(3, 'Keyboard', 100, 69.99, CURRENT_TIMESTAMP, 3),  -- Price reduced
+(4, 'Monitor', 30, 299.99, CURRENT_TIMESTAMP, 3);   -- New product
+
+-- Create a unified history table
+CREATE TABLE memory.default.inventory_history (
+    id BIGINT,
+    product_name VARCHAR,
+    quantity INTEGER,
+    price DECIMAL(10,2),
+    snapshot_time TIMESTAMP WITH TIME ZONE,
+    version_id INTEGER
+);
+
+-- Combine all versions into history
+INSERT INTO memory.default.inventory_history 
+SELECT * FROM memory.default.inventory_v1
+UNION ALL
+SELECT * FROM memory.default.inventory_v2
+UNION ALL
+SELECT * FROM memory.default.inventory_v3;
+
+-- Show complete history
+SELECT * FROM memory.default.inventory_history 
+ORDER BY id, version_id;
+
+-- Simulate time travel: Query specific version
+SELECT 'Version 1 State:' as query_type, * 
+FROM memory.default.inventory_history 
+WHERE version_id = 1
+UNION ALL
+SELECT 'Version 2 State:', * 
+FROM memory.default.inventory_history 
+WHERE version_id = 2;
+
+-- Compare versions (simulate time travel comparison)
+WITH v1 AS (
+    SELECT id, product_name, quantity as old_quantity, price as old_price
+    FROM memory.default.inventory_history 
+    WHERE version_id = 1
+),
+v3 AS (
+    SELECT id, product_name, quantity as new_quantity, price as new_price
+    FROM memory.default.inventory_history 
+    WHERE version_id = 3
+)
 SELECT 
-    snapshot_id,
-    committed_at,
-    summary
-FROM iceberg.timetravel."inventory$snapshots"
-ORDER BY committed_at;
+    COALESCE(v1.id, v3.id) as id,
+    COALESCE(v1.product_name, v3.product_name) as product_name,
+    v1.old_quantity,
+    v3.new_quantity,
+    COALESCE(v3.new_quantity, 0) - COALESCE(v1.old_quantity, 0) as quantity_change,
+    v1.old_price,
+    v3.new_price,
+    COALESCE(v3.new_price, 0) - COALESCE(v1.old_price, 0) as price_change,
+    CASE 
+        WHEN v1.id IS NULL THEN 'NEW'
+        WHEN v3.id IS NULL THEN 'DELETED'
+        ELSE 'MODIFIED'
+    END as change_type
+FROM v1 
+FULL OUTER JOIN v3 ON v1.id = v3.id
+ORDER BY id;
 
--- Simulate inventory changes over time
--- Update 1: Sell some laptops
-UPDATE iceberg.timetravel.inventory 
-SET quantity = 45, last_updated = CURRENT_TIMESTAMP 
-WHERE id = 1;
-
--- Wait a moment to create distinct timestamps
--- In a real scenario, these would be separate transactions
-
--- Update 2: Restock mice
-UPDATE iceberg.timetravel.inventory 
-SET quantity = 250, last_updated = CURRENT_TIMESTAMP 
-WHERE id = 2;
-
--- Update 3: Price change for keyboard
-UPDATE iceberg.timetravel.inventory 
-SET price = 69.99, last_updated = CURRENT_TIMESTAMP 
-WHERE id = 3;
-
--- Add new product
-INSERT INTO iceberg.timetravel.inventory VALUES
-(4, 'Monitor', 30, 299.99, CURRENT_TIMESTAMP);
-
--- Current state
-SELECT * FROM iceberg.timetravel.inventory ORDER BY id;
-
--- Show all snapshots now
+-- Audit trail: show all changes over time
 SELECT 
-    snapshot_id,
-    committed_at,
-    summary
-FROM iceberg.timetravel."inventory$snapshots"
-ORDER BY committed_at;
+    product_name,
+    version_id,
+    quantity,
+    price,
+    snapshot_time,
+    LAG(quantity) OVER (PARTITION BY id ORDER BY version_id) as prev_quantity,
+    LAG(price) OVER (PARTITION BY id ORDER BY version_id) as prev_price
+FROM memory.default.inventory_history
+ORDER BY id, version_id;
 
--- Time travel queries using snapshot IDs
--- Replace SNAPSHOT_ID_HERE with actual snapshot ID from the snapshots query above
-
--- Query state at a specific snapshot
--- SELECT * FROM iceberg.timetravel.inventory FOR VERSION AS OF SNAPSHOT_ID_HERE;
-
--- Query using timestamp (approximate)
--- SELECT * FROM iceberg.timetravel.inventory FOR TIMESTAMP AS OF TIMESTAMP '2024-01-01 12:00:00';
-
--- Compare current vs historical data
--- WITH historical AS (
---     SELECT id, product_name, quantity as old_quantity, price as old_price
---     FROM iceberg.timetravel.inventory FOR VERSION AS OF SNAPSHOT_ID_HERE
--- ),
--- current AS (
---     SELECT id, product_name, quantity as new_quantity, price as new_price
---     FROM iceberg.timetravel.inventory
--- )
--- SELECT 
---     h.id,
---     h.product_name,
---     h.old_quantity,
---     c.new_quantity,
---     (c.new_quantity - h.old_quantity) as quantity_change,
---     h.old_price,
---     c.new_price,
---     (c.new_price - h.old_price) as price_change
--- FROM historical h
--- JOIN current c ON h.id = c.id;
-
--- Show table history for audit trail
-SELECT * FROM iceberg.timetravel."inventory$history" ORDER BY made_current_at;
-
--- Show file-level changes
+-- Inventory trends over time
 SELECT 
-    file_path,
-    file_format,
-    record_count,
-    file_size_in_bytes
-FROM iceberg.timetravel."inventory$files";
+    version_id,
+    COUNT(DISTINCT id) as product_count,
+    SUM(quantity) as total_inventory,
+    AVG(price) as avg_price,
+    MAX(snapshot_time) as snapshot_time
+FROM memory.default.inventory_history
+GROUP BY version_id
+ORDER BY version_id;
 
--- Rollback example (careful - this creates a new snapshot with old data)
--- INSERT INTO iceberg.timetravel.inventory 
--- SELECT * FROM iceberg.timetravel.inventory FOR VERSION AS OF SNAPSHOT_ID_HERE
--- WHERE id = 1;
+-- Find products with price changes
+SELECT 
+    product_name,
+    MIN(price) as lowest_price,
+    MAX(price) as highest_price,
+    MAX(price) - MIN(price) as price_variance,
+    COUNT(DISTINCT version_id) as versions_tracked
+FROM memory.default.inventory_history
+GROUP BY product_name
+HAVING COUNT(DISTINCT price) > 1;

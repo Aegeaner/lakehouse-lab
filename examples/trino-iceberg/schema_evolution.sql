@@ -1,75 +1,86 @@
--- Schema Evolution Examples with Trino-Iceberg
+-- Schema Evolution Examples with Trino using Memory Catalog
+-- Note: Memory catalog doesn't support ALTER TABLE operations
+-- This demonstrates alternative approaches for schema changes
 
--- Create initial table
-CREATE SCHEMA IF NOT EXISTS iceberg.evolution;
+-- Clean up any existing table
+DROP TABLE IF EXISTS memory.default.user_profiles_v1;
+DROP TABLE IF EXISTS memory.default.user_profiles_v2;
 
-CREATE TABLE iceberg.evolution.user_profiles (
+-- Create initial table (version 1)
+CREATE TABLE memory.default.user_profiles_v1 (
     id BIGINT,
     username VARCHAR,
     email VARCHAR,
     created_at TIMESTAMP WITH TIME ZONE
-) WITH (
-    format = 'PARQUET',
-    location = 's3://lakehouse/iceberg/evolution/user_profiles'
 );
 
 -- Insert initial data
-INSERT INTO iceberg.evolution.user_profiles VALUES
+INSERT INTO memory.default.user_profiles_v1 VALUES
 (1, 'alice', 'alice@example.com', CURRENT_TIMESTAMP),
 (2, 'bob', 'bob@example.com', CURRENT_TIMESTAMP),
 (3, 'charlie', 'charlie@example.com', CURRENT_TIMESTAMP);
 
 -- Query initial state
-SELECT * FROM iceberg.evolution.user_profiles;
+SELECT * FROM memory.default.user_profiles_v1;
 
--- Add new columns (schema evolution)
-ALTER TABLE iceberg.evolution.user_profiles 
-ADD COLUMN age INTEGER;
+-- Simulate schema evolution by creating new table with additional columns
+CREATE TABLE memory.default.user_profiles_v2 (
+    id BIGINT,
+    user_name VARCHAR,  -- renamed from username
+    email VARCHAR,
+    created_at TIMESTAMP WITH TIME ZONE,
+    age INTEGER,        -- new column
+    status VARCHAR      -- new column
+);
 
-ALTER TABLE iceberg.evolution.user_profiles 
-ADD COLUMN status VARCHAR DEFAULT 'active';
+-- Migrate data with schema changes and defaults
+INSERT INTO memory.default.user_profiles_v2 
+SELECT 
+    id,
+    username as user_name,  -- column rename
+    email,
+    created_at,
+    NULL as age,            -- new column with NULL
+    'active' as status      -- new column with default
+FROM memory.default.user_profiles_v1;
 
--- Insert data with new schema
-INSERT INTO iceberg.evolution.user_profiles VALUES
+-- Add new records with full schema
+INSERT INTO memory.default.user_profiles_v2 VALUES
 (4, 'diana', 'diana@example.com', CURRENT_TIMESTAMP, 28, 'active'),
 (5, 'eve', 'eve@example.com', CURRENT_TIMESTAMP, 32, 'inactive');
 
 -- Query with evolved schema
-SELECT * FROM iceberg.evolution.user_profiles;
+SELECT * FROM memory.default.user_profiles_v2;
 
--- Show how old data still works (NULL values for new columns)
+-- Show how to handle schema evolution patterns
 SELECT 
     id, 
-    username, 
-    COALESCE(age, 0) as age_with_default,
+    user_name, 
+    COALESCE(age, 25) as age_with_default,  -- Handle NULLs
     COALESCE(status, 'unknown') as status_with_default
-FROM iceberg.evolution.user_profiles;
+FROM memory.default.user_profiles_v2;
 
--- Rename a column
-ALTER TABLE iceberg.evolution.user_profiles 
-RENAME COLUMN username TO user_name;
+-- Demonstrate data type compatibility checks
+SELECT 
+    id,
+    user_name,
+    email,
+    EXTRACT(YEAR FROM created_at) as signup_year,
+    CASE 
+        WHEN age IS NULL THEN 'Age not provided'
+        WHEN age < 30 THEN 'Young'
+        ELSE 'Experienced'
+    END as age_category,
+    status
+FROM memory.default.user_profiles_v2
+ORDER BY id;
 
--- Update old records with new column values
-UPDATE iceberg.evolution.user_profiles 
-SET age = 25, status = 'active' 
-WHERE id = 1;
-
-UPDATE iceberg.evolution.user_profiles 
-SET age = 30, status = 'active' 
-WHERE id = 2;
-
-UPDATE iceberg.evolution.user_profiles 
-SET age = 35, status = 'active' 
-WHERE id = 3;
-
--- Final query
-SELECT * FROM iceberg.evolution.user_profiles ORDER BY id;
-
--- Show table history to see schema changes
-SELECT * FROM iceberg.evolution."user_profiles$history";
-
--- Show table snapshots
-SELECT * FROM iceberg.evolution."user_profiles$snapshots";
-
--- Drop a column (if needed - be careful!)
--- ALTER TABLE iceberg.evolution.user_profiles DROP COLUMN status;
+-- Show data distribution after schema evolution
+SELECT 
+    status,
+    COUNT(*) as user_count,
+    AVG(COALESCE(age, 25)) as avg_age,
+    MIN(created_at) as earliest_signup,
+    MAX(created_at) as latest_signup
+FROM memory.default.user_profiles_v2
+GROUP BY status;

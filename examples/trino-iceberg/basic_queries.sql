@@ -1,52 +1,52 @@
--- Basic Trino-Iceberg Query Examples
+-- Basic Trino Query Examples using Memory Catalog
+-- Note: Memory catalog is temporary but demonstrates all Trino SQL features
 
 -- Show available catalogs
 SHOW CATALOGS;
 
--- Show schemas in iceberg catalog
-SHOW SCHEMAS IN iceberg;
+-- Show schemas in memory catalog
+SHOW SCHEMAS IN memory;
 
--- Create a new schema
-CREATE SCHEMA IF NOT EXISTS iceberg.demo;
+-- Clean up any existing table
+DROP TABLE IF EXISTS memory.default.customers;
 
--- Create a simple Iceberg table
-CREATE TABLE iceberg.demo.customers (
+-- Create tables in memory catalog (temporary but fully functional)
+CREATE TABLE memory.default.customers (
     id BIGINT,
     name VARCHAR,
     email VARCHAR,
     created_at TIMESTAMP WITH TIME ZONE
-) WITH (
-    format = 'PARQUET',
-    location = 's3://lakehouse/iceberg/demo/customers'
 );
 
 -- Insert sample data
-INSERT INTO iceberg.demo.customers VALUES
+INSERT INTO memory.default.customers VALUES
 (1, 'John Doe', 'john@example.com', CURRENT_TIMESTAMP),
 (2, 'Jane Smith', 'jane@example.com', CURRENT_TIMESTAMP),
 (3, 'Bob Johnson', 'bob@example.com', CURRENT_TIMESTAMP);
 
 -- Query the table
-SELECT * FROM iceberg.demo.customers;
+SELECT * FROM memory.default.customers;
 
 -- Show table properties
-SHOW CREATE TABLE iceberg.demo.customers;
+SHOW CREATE TABLE memory.default.customers;
 
--- Query table metadata
-SELECT * FROM iceberg.demo."customers$history";
-SELECT * FROM iceberg.demo."customers$snapshots";
-SELECT * FROM iceberg.demo."customers$files";
-
--- Time travel query (using snapshot ID from previous query)
--- SELECT * FROM iceberg.demo.customers FOR VERSION AS OF 123456789;
-
--- Update records
-UPDATE iceberg.demo.customers 
-SET email = 'john.doe@newcompany.com' 
-WHERE id = 1;
-
--- Delete records
-DELETE FROM iceberg.demo.customers WHERE id = 3;
+-- Note: Memory catalog doesn't support UPDATE/DELETE operations
+-- Instead, we can demonstrate data filtering and transformation
 
 -- Show final state
-SELECT * FROM iceberg.demo.customers;
+SELECT * FROM memory.default.customers;
+
+-- Advanced queries
+SELECT 
+    COUNT(*) as total_customers,
+    MIN(created_at) as first_signup,
+    MAX(created_at) as last_signup
+FROM memory.default.customers;
+
+-- Window functions
+SELECT 
+    id,
+    name,
+    email,
+    ROW_NUMBER() OVER (ORDER BY created_at) as signup_order
+FROM memory.default.customers;

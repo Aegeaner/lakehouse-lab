@@ -43,7 +43,7 @@ EXAMPLE_TYPE=${1:-"all"}
 case $EXAMPLE_TYPE in
     "basic")
         echo "🎯 Running basic queries example..."
-        run_trino_file "$EXAMPLES_DIR/basic_queries.sql" "Basic Iceberg Operations"
+        run_trino_file "$EXAMPLES_DIR/basic_queries.sql" "Basic SQL Operations"
         ;;
     "analytics")
         echo "🎯 Running advanced analytics example..."
@@ -55,11 +55,11 @@ case $EXAMPLE_TYPE in
         ;;
     "timetravel")
         echo "🎯 Running time travel example..."
-        run_trino_file "$EXAMPLES_DIR/time_travel.sql" "Time Travel and Versioning"
+        run_trino_file "$EXAMPLES_DIR/time_travel.sql" "Time Travel and Versioning Concepts"
         ;;
     "all")
         echo "🎯 Running all Trino examples..."
-        run_trino_file "$EXAMPLES_DIR/basic_queries.sql" "Basic Iceberg Operations"
+        run_trino_file "$EXAMPLES_DIR/basic_queries.sql" "Basic SQL Operations"
         
         echo ""
         echo "⏳ Waiting 2 seconds between examples..."
@@ -77,7 +77,7 @@ case $EXAMPLE_TYPE in
         echo "⏳ Waiting 2 seconds between examples..."
         sleep 2
         
-        run_trino_file "$EXAMPLES_DIR/time_travel.sql" "Time Travel and Versioning"
+        run_trino_file "$EXAMPLES_DIR/time_travel.sql" "Time Travel and Versioning Concepts"
         ;;
     *)
         echo "❌ Invalid example type: $EXAMPLE_TYPE"
